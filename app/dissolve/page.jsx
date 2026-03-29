@@ -8,26 +8,27 @@ export default function DissolveMapPage() {
     const canvasRef = useRef()
 
     return (
-        <div style={{ width: '100%', height: '100vh', margin: 0, padding: 0, background: '#000000' }}>
+        <div style={{ width: '100%', height: '100vh', margin: 0, padding: 0, background: '#ffffff' }}>
             {/* Canvas 容器 */}
             <div style={{ width: '100%', height: '100%' }}>
                 <Canvas
                     camera={{ position: [0, 0, 10], fov: 45 }}
                     gl={{ alpha: true, antialias: true, preserveDrawingBuffer: true }}
                 >
-                    <color attach="background" args={['#000000']} />
+                    <color attach="background" args={['#ffffff']} />
                     <DissolveMap ref={canvasRef} />
                 </Canvas>
             </div>
 
-            {/* 使用说明 */}
+            {/* 使用说明 - 隐藏 */}
             <div
                 style={{
+                    display: 'none',
                     position: 'fixed',
                     top: 20,
                     left: 20,
-                    color: '#fff',
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    color: '#333',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
                     padding: '20px',
                     borderRadius: '8px',
                     fontFamily: 'Arial, sans-serif',
@@ -35,8 +36,8 @@ export default function DissolveMapPage() {
                     maxWidth: '320px',
                     zIndex: 10,
                     lineHeight: '1.8',
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.8)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                    border: '1px solid #ccc',
                 }}
             >
                 <h3 style={{ margin: '0 0 15px 0', fontSize: '16px', fontWeight: 'bold' }}>
@@ -54,13 +55,14 @@ export default function DissolveMapPage() {
                 </p>
             </div>
 
-            {/* 底部信息 */}
+            {/* 底部信息 - 隐藏 */}
             <div
                 style={{
+                    display: 'none',
                     position: 'fixed',
                     bottom: 20,
                     left: 20,
-                    color: '#888',
+                    color: '#999',
                     fontSize: '12px',
                     fontFamily: 'monospace',
                 }}
