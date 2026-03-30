@@ -3,6 +3,8 @@ uniform sampler2D uNoise;
 uniform float uDissolve;
 uniform vec3 uBgColor;
 uniform float uVignetteIntensity;
+uniform float uVignetteNoiseScale;  // 控制噪声纹理缩放（默认0.8）
+uniform float uVignetteFeatherRange; // 控制羽化范围（默认0.42）
 
 varying vec2 vUv;
 
@@ -20,30 +22,37 @@ void main() {
     dissolveAlpha = smoothstep(0.0, 0.1, noise - threshold);
   }
   
-  // ========== 边缘羽化淡化（Vignette Effect）- 不规则形状 ==========
-  // 计算到四边的距离
-  float distFromLeft = vUv.x;
-  float distFromRight = 1.0 - vUv.x;
-  float distFromTop = 1.0 - vUv.y;
-  float distFromBottom = vUv.y;
-  
-  // 为每个方向创建不同的羽化范围，右下角扩大留白
-  float vigLeft = smoothstep(0.0, 0.20, distFromLeft);
-  float vigRight = smoothstep(0.0, 0.35, distFromRight);  // 右边扩大
-  float vigTop = smoothstep(0.0, 0.22, distFromTop);
-  float vigBottom = smoothstep(0.0, 0.38, distFromBottom);  // 下面扩大
-  
-  // 合并四个方向的vignette - 使用乘法创建不规则效果
-  float vignetteAlpha = vigLeft * vigRight * vigTop * vigBottom;
-  
-  // 添加径向淡化以增强不规则性
+  // ========== 噪声驱动的松弛边缘羽化（云雾散开效果） ==========
+  // 1. 计算基础径向距离
   vec2 centerUv = vUv - vec2(0.5);
   float distFromCenter = length(centerUv);
-  float radialVignette = smoothstep(0.8, 0.35, distFromCenter);
-  vignetteAlpha = vignetteAlpha * mix(1.0, radialVignette, 0.3);
+  
+  // 2. 叠加三层噪声采样
+  // 第一层：大尺度（主要云雾形状）
+  vec2 noiseUv1 = vUv * uVignetteNoiseScale;
+  float noise1 = texture2D(uNoise, noiseUv1).r;
+  
+  // 第二层：中等尺度（中级细节）
+  vec2 noiseUv2 = vUv * uVignetteNoiseScale * 1.8 + vec2(0.3, 0.3);
+  float noise2 = texture2D(uNoise, noiseUv2).r;
+  
+  // 第三层：小尺度（边缘撕裂感）
+  vec2 noiseUv3 = vUv * uVignetteNoiseScale * 3.5 + vec2(-0.5, 0.2);
+  float noise3 = texture2D(uNoise, noiseUv3).r;
+  
+  // 3. 合并噪声（FBM风格的加权）
+  float fbmNoise = noise1 * 0.5 + noise2 * 0.3 + noise3 * 0.2;
+  
+  // 4. 用噪声扰动径向距离，创建松弛不规则的边缘
+  float perturbedDist = distFromCenter + (fbmNoise - 0.5) * 0.15;
+  
+  // 5. 创建宽范围的羽化淡出效果
+  float vignetteAlpha = smoothstep(uVignetteFeatherRange + 0.08, -0.05, perturbedDist);
+  
+  // 6. 额外用噪声增强云雾感，让边缘更飘渺
+  vignetteAlpha = vignetteAlpha * mix(fbmNoise, 1.0, 0.35);
   
   // ========== 合并所有Alpha效果 ==========
-  // 将溶解Alpha和羽化Alpha相乘
   float finalAlpha = dissolveAlpha * vignetteAlpha;
   
   // 混合地图颜色和背景色

@@ -14,6 +14,8 @@ const DissolveAdvancedShaderImpl = shaderMaterial(
         uDissolve: 0,
         uBgColor: new THREE.Color(1.0, 1.0, 1.0),
         uVignetteIntensity: 1.0,
+        uVignetteNoiseScale: 0.8,      // 控制噪声纹理缩放，越小边缘越不规则
+        uVignetteFeatherRange: 0.42,   // 控制羽化范围，越大白色区域越小
     },
     dissolveVert,
     dissolveAdvancedFrag,
@@ -65,6 +67,8 @@ const DissolveMapAdvanced = forwardRef(({ scale = 1, position = [0, 0, 0], ...pr
             localRef.current.uNoise = textures.noise
             localRef.current.uBgColor = bgColor
             localRef.current.uVignetteIntensity = 1.0
+            localRef.current.uVignetteNoiseScale = 0.8
+            localRef.current.uVignetteFeatherRange = 0.42
         }
     }, [textures, bgColor])
 
