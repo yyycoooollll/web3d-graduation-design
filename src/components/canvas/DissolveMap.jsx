@@ -6,6 +6,7 @@ import { shaderMaterial } from '@react-three/drei'
 import dissolveVert from '@/templates/Shader/glsl/dissolve.vert'
 import dissolveFrag from '@/templates/Shader/glsl/dissolve.frag'
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react'
+import gsap from 'gsap'
 
 const DissolveShaderImpl = shaderMaterial(
     {
@@ -33,6 +34,7 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
     const dissolveRef = useRef(0)
     const targetDissolveRef = useRef(0)
     const lastWheelTimeRef = useRef(0)
+    const hasClickedRef = useRef(false)
 
     // 鼠标跟随视差效果
     const parallaxTargetRef = useRef({ x: 0, y: 0 })
@@ -96,6 +98,24 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
         }
     }, [gl])
 
+    // 点击处理 - 触发溶解动画
+    const handleClick = () => {
+        if (hasClickedRef.current) return
+
+        hasClickedRef.current = true
+        console.log('✓ DissolveMap 被点击，触发溶解动画')
+
+        const dissolveObj = { value: targetDissolveRef.current }
+        gsap.to(dissolveObj, {
+            value: 1.0,
+            duration: 3.0,
+            ease: 'power2.inOut',
+            onUpdate() {
+                targetDissolveRef.current = dissolveObj.value
+            },
+        })
+    }
+
     // 动画帧更新
     useFrame((state) => {
         // 溶解效果更新
@@ -150,7 +170,7 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
     })
 
     return (
-        <mesh ref={meshRef} position={position} {...props}>
+        <mesh ref={meshRef} position={position} onClick={handleClick} {...props}>
             <planeGeometry args={[8, 4.5]} />
             <dissolveShaderImpl ref={localRef} attach='material' />
         </mesh>
