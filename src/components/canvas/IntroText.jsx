@@ -9,15 +9,15 @@ import useSceneStore from '@/store/sceneStore'
 
 const IntroText = forwardRef(({ position = [0, 0, 0], ...props }, ref) => {
     const groupRef = useRef()
-    const chineseTextRef = useRef()
     const englishTextRef = useRef()
+    const chineseTextRef = useRef()
     const { gl } = useThree()
     const { setSceneState, setShowClickTip, setWhiteScreenOpacity } = useSceneStore()
 
     const [hasClicked, setHasClicked] = useState(false)
-    const [progress, setProgress] = useState(0)
-    const fadeInCompleteRef = useRef(false)
-    const noiseMaterialsRef = useRef([])
+    const [dissolve, setDissolve] = useState(0)
+    const textureLoadedRef = useRef(false)
+    const uniformsRefMap = useRef(new Map())
 
     // 鼠标视差
     const parallaxTargetRef = useRef({ x: 0, y: 0 })
@@ -26,83 +26,88 @@ const IntroText = forwardRef(({ position = [0, 0, 0], ...props }, ref) => {
 
     useImperativeHandle(ref, () => groupRef.current)
 
-    // 加载噪声纹理并应用到文字材质
+    // 加载纹理并应用到材质
     useEffect(() => {
         const textureLoader = new THREE.TextureLoader()
 
-        // 加载或生成噪声纹理
-        let noiseTexture = null
-
-        // 尝试加载 noise.png，如果失败则生成
-        textureLoader.load('/img/noise.png',
+        textureLoader.load(
+            '/noise2.png',
             (texture) => {
-                noiseTexture = texture
-                applyNoiseMaterial()
+                // 成功加载 noise2.png
+                applyNoiseShadersToTexts(texture)
+                textureLoadedRef.current = true
+
+                // 启动入场动画（英文 + 中文时差）
+                setTimeout(() => {
+                    startEntranceAnimation()
+                }, 200)
+
+                console.log('✓ noise2.png 加载成功，已应用到文字材质')
             },
             undefined,
-            () => {
-                // 如果加载失败，生成 SimplexNoise 或 PerlinNoise
-                console.log('noise.png 不存在，生成程序化噪声纹理')
-                noiseTexture = generateNoiseTexture()
-                applyNoiseMaterial()
+            (error) => {
+                console.error('noise2.png 加载失败:', error)
+                // 如果加载失败，生成程序化噪声
+                const generatedTexture = generateNoiseTexture()
+                applyNoiseShadersToTexts(generatedTexture)
+                textureLoadedRef.current = true
+
+                setTimeout(() => {
+                    startEntranceAnimation()
+                }, 200)
             }
         )
 
-        function applyNoiseMaterial() {
-            if (!noiseTexture) return
-
-            // 为中文和英文文字应用自定义着色器
-            const applyShaderToText = (textRef) => {
+        function applyNoiseShadersToTexts(noiseTexture) {
+            const applyShaderToText = (textRef, textKey) => {
                 if (!textRef.current || !textRef.current.material) return
 
-                const originalMaterial = textRef.current.material
+                const material = textRef.current.material
+                const originalOnBeforeCompile = material.onBeforeCompile
 
-                // 保存原始属性
-                const originalOnBeforeCompile = originalMaterial.onBeforeCompile
-
-                originalMaterial.onBeforeCompile = (shader) => {
-                    // 调用原始的 onBeforeCompile（如果有）
+                material.onBeforeCompile = (shader) => {
                     if (originalOnBeforeCompile) {
                         originalOnBeforeCompile(shader)
                     }
 
                     // 注入 uniform
                     shader.uniforms.u_noiseTex = { value: noiseTexture }
-                    shader.uniforms.u_progress = { value: progress }
+                    shader.uniforms.u_dissolve = { value: 0 }
 
-                    // 修改 fragment shader
+                    // 修改 fragment shader - 使用 discard 实现消散
                     shader.fragmentShader = shader.fragmentShader.replace(
-                        '#include <map_fragment>',
+                        '#include <output_fragment>',
                         `
-            #include <map_fragment>
-            
-            // 噪声溶解效果
+            // 噪点消散效果
             vec3 noiseColor = texture2D(u_noiseTex, vUv).rgb;
             float noiseValue = noiseColor.r;
             
-            // 根据 progress 和噪声来确定像素是否保留
-            float dissolveThreshold = mix(1.0, 0.0, u_progress);
-            float fade = smoothstep(dissolveThreshold - 0.1, dissolveThreshold + 0.1, noiseValue);
+            // 当 noise.r < u_dissolve 时 discard
+            if (noiseValue < u_dissolve) {
+                discard;
+            }
             
-            // 应用强度
-            diffuseColor.a *= fade;
-            `
+            #include <output_fragment>
+                        `
                     )
 
-                    noiseMaterialsRef.current.push(shader.uniforms)
+                    // 保存 uniform 引用以便后续更新
+                    uniformsRefMap.current.set(textKey, shader.uniforms)
                 }
 
-                originalMaterial.transparent = true
-                originalMaterial.needsUpdate = true
+                material.transparent = true
+                material.needsUpdate = true
             }
 
-            applyShaderToText(chineseTextRef)
-            applyShaderToText(englishTextRef)
+            applyShaderToText(englishTextRef, 'english')
+            applyShaderToText(chineseTextRef, 'chinese')
         }
 
         return () => {
-            if (noiseTexture) noiseTexture.dispose()
+            const refCopy = new Map(uniformsRefMap.current)
+            refCopy.clear()
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     // 生成程序化噪声纹理
@@ -114,7 +119,6 @@ const IntroText = forwardRef(({ position = [0, 0, 0], ...props }, ref) => {
         canvas.height = height
         const ctx = canvas.getContext('2d')
 
-        // 简单的 Perlin-like noise 替代品：使用多个 sin 波
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const value =
@@ -133,31 +137,71 @@ const IntroText = forwardRef(({ position = [0, 0, 0], ...props }, ref) => {
         return texture
     }
 
-    // 点击处理
+    // 入场动画：英文先出，中文时差出
+    function startEntranceAnimation() {
+        const englishOpacityObj = { value: 0 }
+        const chineseOpacityObj = { value: 0 }
+
+        const timeline = gsap.timeline()
+
+        // 英文入场 (0s - 2s)
+        timeline.to(englishOpacityObj, {
+            value: 1,
+            duration: 2.0,
+            ease: 'power2.inOut',
+            onUpdate() {
+                if (englishTextRef.current && englishTextRef.current.material) {
+                    englishTextRef.current.material.opacity = englishOpacityObj.value
+                }
+            },
+        }, 0)
+
+        // 中文入场 (0.8s - 2.8s，延迟0.8s)
+        timeline.to(chineseOpacityObj, {
+            value: 1,
+            duration: 2.0,
+            ease: 'power2.inOut',
+            onUpdate() {
+                if (chineseTextRef.current && chineseTextRef.current.material) {
+                    chineseTextRef.current.material.opacity = chineseOpacityObj.value
+                }
+            },
+        }, 0.8)
+
+        // 完成后显示点击提示
+        timeline.add(() => {
+            if (!hasClicked) {
+                setShowClickTip(true)
+                console.log('✓ 入场动画完成，显示点击提示')
+            }
+        })
+    }
+
+    // 点击处理：触发消散动画
     const handleClick = () => {
         if (hasClicked) return
 
         setHasClicked(true)
         setShowClickTip(false)
 
-        console.log('✓ 文字被点击，触发溶解动画')
+        console.log('✓ 文字被点击，触发消散动画')
 
         const timeline = gsap.timeline()
-        const progressObj = { value: progress }
+        const dissolveObj = { value: 0 }
 
-        // 噪声溶解动画（3 秒）
+        // 噪点消散动画（3 秒）
         timeline.to(
-            progressObj,
+            dissolveObj,
             {
                 value: 1.0,
                 duration: 3.0,
                 ease: 'power2.inOut',
                 onUpdate() {
-                    setProgress(progressObj.value)
-                    // 更新所有材质的 u_progress uniform
-                    noiseMaterialsRef.current.forEach((uniforms) => {
-                        if (uniforms.u_progress) {
-                            uniforms.u_progress.value = progressObj.value
+                    setDissolve(dissolveObj.value)
+                    // 更新两个文字的 u_dissolve uniform
+                    uniformsRefMap.current.forEach((uniforms) => {
+                        if (uniforms.u_dissolve) {
+                            uniforms.u_dissolve.value = dissolveObj.value
                         }
                     })
                 },
@@ -165,7 +209,7 @@ const IntroText = forwardRef(({ position = [0, 0, 0], ...props }, ref) => {
             0
         )
 
-        // 白屏闪烁（从 progress 1.5s 开始，与溶解重叠）
+        // 白屏闪烁（从 progress 1.5s 开始）
         const whiteScreenObj = { opacity: 0 }
         timeline.to(
             whiteScreenObj,
@@ -195,32 +239,8 @@ const IntroText = forwardRef(({ position = [0, 0, 0], ...props }, ref) => {
         })
     }
 
-    // 每帧更新
+    // 每帧更新：鼠标视差
     useFrame((state) => {
-        // 初始淡入（前 2 秒）
-        if (!fadeInCompleteRef.current) {
-            const newProgress = Math.min(progress + 0.016 / 2, 1.0)
-            setProgress(newProgress)
-
-            // 更新材质的 u_progress
-            noiseMaterialsRef.current.forEach((uniforms) => {
-                if (uniforms.u_progress) {
-                    uniforms.u_progress.value = newProgress
-                }
-            })
-
-            if (newProgress >= 1.0) {
-                fadeInCompleteRef.current = true
-                setTimeout(() => {
-                    if (!hasClicked) {
-                        setShowClickTip(true)
-                        console.log('✓ Click 提示已显示')
-                    }
-                }, 100)
-            }
-        }
-
-        // 鼠标视差
         const mouseX = state.mouse.x
         const mouseY = state.mouse.y
 
@@ -241,30 +261,32 @@ const IntroText = forwardRef(({ position = [0, 0, 0], ...props }, ref) => {
 
     return (
         <group ref={groupRef} position={position} onClick={handleClick} {...props}>
-            {/* 中文文字 */}
+            {/* 英文副标题 - 先出现 */}
             <Text
-                ref={chineseTextRef}
-                font="/fonts/CC0-OradanoMingChaoTi-2.ttf"
-                fontSize={0.8}
+                ref={englishTextRef}
+                font="/fonts/ZiYueYingYinSong-2.ttf"
+                fontSize={0.4}
                 position={[0, 0.5, 0]}
                 anchorX="center"
                 anchorY="middle"
                 color="#000000"
+                opacity={0}
             >
-                这是一个关于我奶奶的故事
+                A Story of My Grandmother
             </Text>
 
-            {/* 英文副标题 */}
+            {/* 中文主标题 - 延迟出现 */}
             <Text
-                ref={englishTextRef}
-                font="/fonts/CC0-OradanoMingChaoTi-2.ttf"
-                fontSize={0.4}
-                position={[0, -0.3, 0]}
+                ref={chineseTextRef}
+                font="/fonts/ZiYueYingYinSong-2.ttf"
+                fontSize={0.8}
+                position={[0, -0.5, 0]}
                 anchorX="center"
                 anchorY="middle"
                 color="#000000"
+                opacity={0}
             >
-                A Story of My Grandmother
+                这是一个关于我奶奶的故事
             </Text>
         </group>
     )

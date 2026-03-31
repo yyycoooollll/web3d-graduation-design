@@ -7,6 +7,7 @@ import dissolveVert from '@/templates/Shader/glsl/dissolve.vert'
 import dissolveFrag from '@/templates/Shader/glsl/dissolve.frag'
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react'
 import gsap from 'gsap'
+import useSceneStore from '@/store/sceneStore'
 
 const DissolveShaderImpl = shaderMaterial(
     {
@@ -15,8 +16,8 @@ const DissolveShaderImpl = shaderMaterial(
         uDissolve: 0,
         uBgColor: new THREE.Color(1.0, 1.0, 1.0),
         uVignetteIntensity: 1.0,
-        uVignetteNoiseScale: 0.8,      // 控制噪声纹理缩放，越小边缘越不规则
-        uVignetteFeatherRange: 0.42,   // 控制羽化范围，越大白色区域越小
+        uVignetteNoiseScale: 0.8,
+        uVignetteFeatherRange: 0.42,
     },
     dissolveVert,
     dissolveFrag,
@@ -29,21 +30,22 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
     const localRef = useRef()
     const meshRef = useRef()
     const { gl, camera, size } = useThree()
+    const { sceneState } = useSceneStore()
     const [textures, setTextures] = useState({ map: null, noise: null })
     const [bgColor, setBgColor] = useState(new THREE.Color(1.0, 1.0, 1.0))
     const dissolveRef = useRef(0)
     const targetDissolveRef = useRef(0)
-    const lastWheelTimeRef = useRef(0)
-    const hasClickedRef = useRef(false)
+    const hasAutoTriggeredRef = useRef(false)
+    const textureLoadedRef = useRef(false)
 
     // 鼠标跟随视差效果
     const parallaxTargetRef = useRef({ x: 0, y: 0 })
     const parallaxCurrentRef = useRef({ x: 0, y: 0 })
-    const maxParallaxRef = useRef({ x: 0.8, y: 0.5 }) // 最大偏移量
+    const maxParallaxRef = useRef({ x: 0.8, y: 0.5 })
 
     useImperativeHandle(ref, () => localRef.current)
 
-    // 加载纹理并提取背景色
+    // 加载纹理
     useEffect(() => {
         const textureLoader = new THREE.TextureLoader()
         let cancelled = false
@@ -54,6 +56,7 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
             setTextures(prev => ({ ...prev, [type]: texture }))
         }
 
+        // 地图用 noise.png（不是 noise2.png）
         textureLoader.load('/map.png', (tex) => handleTextureLoad('map', tex))
         textureLoader.load('/noise.png', (tex) => handleTextureLoad('noise', tex))
 
@@ -62,7 +65,7 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
         }
     }, [])
 
-    // 更新shader中的纹理和背景色
+    // 当纹理加载完成时，更新 shader 并准备自动触发
     useEffect(() => {
         if (localRef.current && textures.map && textures.noise) {
             localRef.current.uMap = textures.map
@@ -74,47 +77,30 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
         }
     }, [textures, bgColor])
 
-    // 鼠标滚轮事件处理
+    // 监听 sceneState，当变为 'map' 时自动触发溶解
     useEffect(() => {
-        const handleWheel = (e) => {
-            const now = Date.now()
+        if (sceneState === 'map' && textureLoadedRef.current && !hasAutoTriggeredRef.current) {
+            hasAutoTriggeredRef.current = true
+            console.log('✓ DissolveMap 自动触发溶解动画')
 
-            if (now - lastWheelTimeRef.current < 30) {
-                return
-            }
-            lastWheelTimeRef.current = now
-
-            if (e.deltaY > 0) {
-                targetDissolveRef.current = Math.min(targetDissolveRef.current + 0.05, 1.0)
-            } else {
-                targetDissolveRef.current = Math.max(targetDissolveRef.current - 0.05, 0)
-            }
+            const dissolveObj = { value: 0 }
+            gsap.to(dissolveObj, {
+                value: 1.0,
+                duration: 4.5,
+                ease: 'power2.inOut',
+                onUpdate() {
+                    targetDissolveRef.current = dissolveObj.value
+                },
+            })
         }
+    }, [sceneState])
 
-        gl.domElement.addEventListener('wheel', handleWheel, { passive: true })
-
-        return () => {
-            gl.domElement.removeEventListener('wheel', handleWheel)
+    // 更新纹理加载状态
+    useEffect(() => {
+        if (textures.map && textures.noise) {
+            textureLoadedRef.current = true
         }
-    }, [gl])
-
-    // 点击处理 - 触发溶解动画
-    const handleClick = () => {
-        if (hasClickedRef.current) return
-
-        hasClickedRef.current = true
-        console.log('✓ DissolveMap 被点击，触发溶解动画')
-
-        const dissolveObj = { value: targetDissolveRef.current }
-        gsap.to(dissolveObj, {
-            value: 1.0,
-            duration: 3.0,
-            ease: 'power2.inOut',
-            onUpdate() {
-                targetDissolveRef.current = dissolveObj.value
-            },
-        })
-    }
+    }, [textures])
 
     // 动画帧更新
     useFrame((state) => {
@@ -170,7 +156,7 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
     })
 
     return (
-        <mesh ref={meshRef} position={position} onClick={handleClick} {...props}>
+        <mesh ref={meshRef} position={position} {...props}>
             <planeGeometry args={[8, 4.5]} />
             <dissolveShaderImpl ref={localRef} attach='material' />
         </mesh>
