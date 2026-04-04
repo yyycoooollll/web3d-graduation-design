@@ -56,7 +56,6 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
             setTextures(prev => ({ ...prev, [type]: texture }))
         }
 
-        // 地图用 noise.png（不是 noise2.png）
         textureLoader.load('/map.png', (tex) => handleTextureLoad('map', tex))
         textureLoader.load('/noise.png', (tex) => handleTextureLoad('noise', tex))
 
@@ -77,23 +76,20 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
         }
     }, [textures, bgColor])
 
-    // 监听 sceneState，当变为 'map' 时自动触发溶解
-    useEffect(() => {
-        if (sceneState === 'map' && textureLoadedRef.current && !hasAutoTriggeredRef.current) {
-            hasAutoTriggeredRef.current = true
-            console.log('✓ DissolveMap 自动触发溶解动画')
-
-            const dissolveObj = { value: 0 }
-            gsap.to(dissolveObj, {
-                value: 1.0,
-                duration: 4.5,
-                ease: 'power2.inOut',
-                onUpdate() {
-                    targetDissolveRef.current = dissolveObj.value
-                },
-            })
-        }
-    }, [sceneState])
+    // 点击触发溶解消散动画
+    const handleClick = () => {
+        if (!textureLoadedRef.current) return
+        if (targetDissolveRef.current >= 1) return
+        const dissolveObj = { value: 0 }
+        gsap.to(dissolveObj, {
+            value: 1.0,
+            duration: 3.5,
+            ease: 'power2.inOut',
+            onUpdate() {
+                targetDissolveRef.current = dissolveObj.value
+            },
+        })
+    }
 
     // 更新纹理加载状态
     useEffect(() => {
@@ -156,7 +152,7 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
     })
 
     return (
-        <mesh ref={meshRef} position={position} {...props}>
+        <mesh ref={meshRef} position={position} {...props} onClick={handleClick}>
             <planeGeometry args={[8, 4.5]} />
             <dissolveShaderImpl ref={localRef} attach='material' />
         </mesh>

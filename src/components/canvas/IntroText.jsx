@@ -137,42 +137,31 @@ const IntroText = forwardRef(({ position = [0, 0, 0], ...props }, ref) => {
         return texture
     }
 
-    // 入场动画：英文先出，中文时差出
+    // 入场动画：初始完全不可见，依次淡入
     function startEntranceAnimation() {
-        const englishOpacityObj = { value: 0 }
-        const chineseOpacityObj = { value: 0 }
-
+        if (englishTextRef.current && englishTextRef.current.material) {
+            englishTextRef.current.material.opacity = 0
+        }
+        if (chineseTextRef.current && chineseTextRef.current.material) {
+            chineseTextRef.current.material.opacity = 0
+        }
         const timeline = gsap.timeline()
-
-        // 英文入场 (0s - 2s)
-        timeline.to(englishOpacityObj, {
-            value: 1,
-            duration: 2.0,
+        // 英文先淡入
+        timeline.to(englishTextRef.current.material, {
+            opacity: 1,
+            duration: 1.5,
             ease: 'power2.inOut',
-            onUpdate() {
-                if (englishTextRef.current && englishTextRef.current.material) {
-                    englishTextRef.current.material.opacity = englishOpacityObj.value
-                }
-            },
         }, 0)
-
-        // 中文入场 (0.8s - 2.8s，延迟0.8s)
-        timeline.to(chineseOpacityObj, {
-            value: 1,
-            duration: 2.0,
+        // 中文后淡入
+        timeline.to(chineseTextRef.current.material, {
+            opacity: 1,
+            duration: 1.5,
             ease: 'power2.inOut',
-            onUpdate() {
-                if (chineseTextRef.current && chineseTextRef.current.material) {
-                    chineseTextRef.current.material.opacity = chineseOpacityObj.value
-                }
-            },
-        }, 0.8)
-
+        }, 1.0)
         // 完成后显示点击提示
         timeline.add(() => {
             if (!hasClicked) {
                 setShowClickTip(true)
-                console.log('✓ 入场动画完成，显示点击提示')
             }
         })
     }
