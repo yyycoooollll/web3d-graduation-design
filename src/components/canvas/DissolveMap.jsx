@@ -30,13 +30,14 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
     const localRef = useRef()
     const meshRef = useRef()
     const { gl, camera, size } = useThree()
-    const { sceneState } = useSceneStore()
+    const { sceneState, setSceneState, setBackgroundOpacity } = useSceneStore()
     const [textures, setTextures] = useState({ map: null, noise: null })
     const [bgColor, setBgColor] = useState(new THREE.Color(1.0, 1.0, 1.0))
     const dissolveRef = useRef(0)
     const targetDissolveRef = useRef(0)
     const hasAutoTriggeredRef = useRef(false)
     const textureLoadedRef = useRef(false)
+    const hasTriggeredPrefaceRef = useRef(false)
 
     // 鼠标跟随视差效果
     const parallaxTargetRef = useRef({ x: 0, y: 0 })
@@ -104,6 +105,39 @@ const DissolveMap = forwardRef(({ scale = 1, position = [0, 0, 0], ...props }, r
         if (localRef.current) {
             dissolveRef.current += (targetDissolveRef.current - dissolveRef.current) * 0.08
             localRef.current.uDissolve = Math.max(0, Math.min(1, dissolveRef.current))
+
+            // 当消散接近完成时，触发背景变黑和场景转换
+            if (dissolveRef.current > 0.9 && !hasTriggeredPrefaceRef.current) {
+                hasTriggeredPrefaceRef.current = true
+
+                // 背景渐变到黑色
+                gsap.to({}, {
+                    onUpdate: function () {
+                        // 从 1 (白) 到 0 (黑)
+                        const bgOpacity = gsap.getProperty({}, 'value') || 1
+                        setBackgroundOpacity(bgOpacity)
+                    },
+                    duration: 2,
+                    ease: 'power1.inOut',
+                    value: 1,
+                })
+
+                gsap.to({}, {
+                    value: 1,
+                    duration: 2,
+                    ease: 'power1.inOut',
+                    onUpdate: function () {
+                        const progress = this.progress()
+                        setBackgroundOpacity(1 - progress)
+                    },
+                    delay: 0.2,
+                })
+
+                // 0.5 秒后转换到 preface 场景
+                setTimeout(() => {
+                    setSceneState('preface_start')
+                }, 500)
+            }
         }
 
         // ========== 视差鼠标跟随效果 ==========
