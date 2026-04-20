@@ -1,0 +1,6 @@
+{
+  "name": "Cosmic Story Preface",
+  "description": "A Three.js based cosmic starfield with interactive parallax and fading story text.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

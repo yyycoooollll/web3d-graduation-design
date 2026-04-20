@@ -1,0 +1,22 @@
+.root {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+}
+
+.aiOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  opacity: 0;
+  animation: aiFadeIn 1s ease-out forwards;
+}
+
+@keyframes aiFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
