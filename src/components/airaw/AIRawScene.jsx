@@ -18,7 +18,7 @@ export default function AIRawScene() {
 
     const timer2 = setTimeout(() => {
       setShowChapter1(true);
-    }, 6500);
+    }, 5000);
 
     return () => {
       clearTimeout(timer1);
@@ -49,8 +49,18 @@ export default function AIRawScene() {
       3: 'Video decode error',
       4: 'Video format not supported',
     };
-    setVideoError(reasonMap[code] || 'Video load failed');
+    const errorMsg = reasonMap[code] || 'Video load failed';
+    console.error('❌ Video Error:', errorMsg, 'Code:', code);
+    setVideoError(errorMsg);
   };
+
+  useEffect(() => {
+    if (videoRef.current) {
+      console.log('✓ Video element mounted:', videoRef.current.src);
+      console.log('✓ Video readyState:', videoRef.current.readyState);
+      console.log('✓ Video networkState:', videoRef.current.networkState);
+    }
+  }, []);
 
   return (
     <div className="relative h-[400vh] w-full bg-black selection:bg-black/10 overflow-x-hidden">
@@ -58,7 +68,7 @@ export default function AIRawScene() {
         className="fixed inset-0 z-10 bg-black overflow-hidden"
       >
         <div className="absolute inset-0">
-          <motion.video 
+          <video 
             ref={videoRef}
             src={videoSrc} 
             autoPlay 
@@ -67,13 +77,17 @@ export default function AIRawScene() {
             preload="auto"
             playsInline 
             onError={handleVideoError}
-            animate={{ 
+            onLoadedMetadata={(e) => console.log('✓ Video metadata loaded:', e.target.videoWidth, 'x', e.target.videoHeight)}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
               filter: isIntroDone 
                 ? "grayscale(100%) contrast(125%) brightness(110%)" 
-                : "grayscale(0%) contrast(100%) brightness(100%)" 
+                : "grayscale(0%) contrast(100%) brightness(100%)",
+              transition: "filter 2s ease-in-out"
             }}
-            transition={{ duration: 2, ease: "easeInOut" }}
-            className="w-full h-full object-cover"
           />
           {videoError && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-white px-6 text-center">

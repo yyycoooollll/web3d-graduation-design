@@ -18,7 +18,7 @@ export default function App() {
     // Stage 2: Show Chapter 1 after vignette starts fading in
     const timer2 = setTimeout(() => {
       setShowChapter1(true);
-    }, 6500);
+    }, 5000);
 
     return () => {
       clearTimeout(timer1);
@@ -62,12 +62,12 @@ export default function App() {
             loop 
             muted
             playsInline 
-            animate={{ 
+            style={{
               filter: isIntroDone 
                 ? "grayscale(100%) contrast(125%) brightness(110%)" 
-                : "grayscale(0%) contrast(100%) brightness(100%)" 
+                : "grayscale(0%) contrast(100%) brightness(100%)",
+              transition: "filter 2s ease-in-out"
             }}
-            transition={{ duration: 2, ease: "easeInOut" }}
             className="w-full h-full object-cover"
           />
           
